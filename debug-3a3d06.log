@@ -201,3 +201,13 @@
 {"hypothesisId":"D","location":"internal/telemetry/tracing.go","message":"resource created","resource_err":false,"serviceName":"job-worker","sessionId":"3a3d06","timestamp":1773716951614}
 {"err":null,"hypothesisId":"A","location":"internal/telemetry/tracing.go","message":"InitTracer done","sessionId":"3a3d06","timestamp":1773716951615,"tracing_enabled":true}
 {"data":{"endpoint":"http://jaeger:4318","err":""},"hypothesisId":"A,E","location":"cmd/worker/main.go","message":"worker InitTracer result","sessionId":"3a3d06","timestamp":1773716951615}
+{"endpoint":"http://jaeger:4318","hypothesisId":"B,E","location":"internal/telemetry/tracing.go","message":"InitTracer started","serviceName":"job-api","sessionId":"3a3d06","timestamp":1773760246830}
+{"endpoint":"http://jaeger:4318","err":"","hypothesisId":"A,E","location":"internal/telemetry/tracing.go","message":"OTLP exporter create","sessionId":"3a3d06","timestamp":1773760246835}
+{"hypothesisId":"D","location":"internal/telemetry/tracing.go","message":"resource created","resource_err":false,"serviceName":"job-api","sessionId":"3a3d06","timestamp":1773760246838}
+{"err":null,"hypothesisId":"A","location":"internal/telemetry/tracing.go","message":"InitTracer done","sessionId":"3a3d06","timestamp":1773760246840,"tracing_enabled":true}
+{"data":{"endpoint":"http://jaeger:4318","err":""},"hypothesisId":"A,E","location":"cmd/api/main.go","message":"api InitTracer result","sessionId":"3a3d06","timestamp":1773760246841}
+{"endpoint":"http://jaeger:4318","hypothesisId":"B,E","location":"internal/telemetry/tracing.go","message":"InitTracer started","serviceName":"job-worker","sessionId":"3a3d06","timestamp":1773760247555}
+{"endpoint":"http://jaeger:4318","err":"","hypothesisId":"A,E","location":"internal/telemetry/tracing.go","message":"OTLP exporter create","sessionId":"3a3d06","timestamp":1773760247556}
+{"hypothesisId":"D","location":"internal/telemetry/tracing.go","message":"resource created","resource_err":false,"serviceName":"job-worker","sessionId":"3a3d06","timestamp":1773760247557}
+{"err":null,"hypothesisId":"A","location":"internal/telemetry/tracing.go","message":"InitTracer done","sessionId":"3a3d06","timestamp":1773760247558,"tracing_enabled":true}
+{"data":{"endpoint":"http://jaeger:4318","err":""},"hypothesisId":"A,E","location":"cmd/worker/main.go","message":"worker InitTracer result","sessionId":"3a3d06","timestamp":1773760247558}
