@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Job Queue Dashboard</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .sub { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+    button { padding: 0.5rem 1rem; margin-right: 0.5rem; margin-bottom: 0.5rem; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 6px; }
+    button:hover { background: #1d4ed8; }
+    button:disabled { background: #94a3b8; cursor: not-allowed; }
+    button.scenario { background: #059669; }
+    button.scenario:hover { background: #047857; }
+    .job-id { font-family: monospace; font-size: 0.85rem; word-break: break-all; margin-top: 0.5rem; }
+    .status { margin-top: 0.75rem; padding: 0.5rem; background: #f1f5f9; border-radius: 4px; font-size: 0.9rem; }
+    .status strong { display: inline-block; min-width: 5rem; }
+    .scenario-steps { margin-top: 0.5rem; padding-left: 1.25rem; font-size: 0.85rem; color: #475569; }
+    .scenario-steps li { margin-bottom: 0.25rem; }
+    .links { margin-top: 1.5rem; }
+    .links a { color: #2563eb; }
+    .error { color: #dc2626; }
+  </style>
+</head>
+<body>
+  <h1>Job Queue Dashboard</h1>
+  <p class="sub">Submit jobs, check status, and manage <strong>Archived (DLQ)</strong>. Use <strong>Scenarios</strong> to show normal flow, retries, delayed run, DLQ, and crash recovery.</p>
+
+  <div class="card" id="archived-dlq">
+    <h2 style="margin-top:0; font-size:1.1rem;">Archived (DLQ)</h2>
+    <p style="font-size:0.9rem; color:#64748b; margin:0 0 0.75rem 0;">List and replay failed jobs that exceeded max retries.</p>
+    <button id="btn-load-archived">Load archived</button>
+    <div id="archived-error" class="error" style="margin-top:0.5rem; display:none;"></div>
+    <div id="archived-table-wrap" style="margin-top:0.75rem; overflow-x:auto; display:none;">
+      <table id="archived-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+        <thead>
+          <tr style="border-bottom:1px solid #ddd; text-align:left;">
+            <th style="padding:0.35rem 0.5rem;">job_id</th>
+            <th style="padding:0.35rem 0.5rem;">type</th>
+            <th style="padding:0.35rem 0.5rem;">queue</th>
+            <th style="padding:0.35rem 0.5rem;">attempt</th>
+            <th style="padding:0.35rem 0.5rem;">last_error</th>
+            <th style="padding:0.35rem 0.5rem;">created_at</th>
+            <th style="padding:0.35rem 0.5rem;"></th>
+          </tr>
+        </thead>
+        <tbody id="archived-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0; font-size:1.1rem;">Scenarios</h2>
+    <p style="font-size:0.9rem; color:#64748b; margin:0 0 0.75rem 0;">Run each scenario and watch status below or in logs.</p>
+    <button class="scenario" data-scenario="A">A: Normal success (email)</button>
+    <button class="scenario" data-scenario="B">B: Retry & recovery (invoice)</button>
+    <button class="scenario" data-scenario="C">C: Delayed 60s (report)</button>
+    <button class="scenario" data-scenario="D">D: Permanent failure → DLQ (invalid image)</button>
+    <button data-type="image" title="Replay with valid payload">D: Replay (valid image)</button>
+    <button class="scenario" data-scenario="E">E: Worker crash recovery (sleep 30s)</button>
+    <div id="scenario-result" class="job-id"></div>
+    <ul id="scenario-steps" class="scenario-steps" style="display:none;"></ul>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0; font-size:1.1rem;">Submit job</h2>
+    <button data-type="hello">Submit Hello</button>
+    <button data-type="email">Submit Email</button>
+    <button data-type="report">Submit Report</button>
+    <div id="last-job" class="job-id"></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0; font-size:1.1rem;">Check status</h2>
+    <input type="text" id="job-id-input" placeholder="Paste job ID" style="width:100%; padding:0.5rem; margin-bottom:0.5rem;">
+    <button id="btn-status">Get status</button>
+    <div id="status-result" class="status"></div>
+  </div>
+
+  <div class="links">
+    <a href="http://localhost:8025" target="_blank">Open MailHog (emails)</a>
+  </div>
+
+  <script>
+    const lastJobEl = document.getElementById('last-job');
+    const jobIdInput = document.getElementById('job-id-input');
+    const statusResult = document.getElementById('status-result');
+    const btnStatus = document.getElementById('btn-status');
+
+    document.querySelectorAll('button[data-scenario]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const scenario = btn.dataset.scenario;
+        btn.disabled = true;
+        const resultEl = document.getElementById('scenario-result');
+        const stepsEl = document.getElementById('scenario-steps');
+        resultEl.textContent = '';
+        stepsEl.style.display = 'none';
+        stepsEl.innerHTML = '';
+        try {
+          const res = await fetch('/api/scenario/' + scenario, { method: 'POST' });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || res.statusText || 'Request failed');
+          resultEl.textContent = 'Scenario ' + data.scenario + ' — Job ID: ' + data.job_id;
+          jobIdInput.value = data.job_id;
+          if (data.steps && data.steps.length) {
+            stepsEl.innerHTML = data.steps.map(s => '<li>' + s + '</li>').join('');
+            stepsEl.style.display = 'block';
+          }
+        } catch (e) {
+          resultEl.innerHTML = '<span class="error">Error: ' + e.message + '</span>';
+        }
+        btn.disabled = false;
+      });
+    });
+
+    document.querySelectorAll('button[data-type]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          const res = await fetch('/api/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: btn.dataset.type })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || res.statusText || 'Request failed');
+          lastJobEl.textContent = 'Job ID: ' + data.job_id;
+          jobIdInput.value = data.job_id;
+        } catch (e) {
+          lastJobEl.innerHTML = '<span class="error">Error: ' + e.message + '</span>';
+        }
+        btn.disabled = false;
+      });
+    });
+
+    btnStatus.addEventListener('click', async () => {
+      const id = jobIdInput.value.trim();
+      if (!id) { statusResult.textContent = 'Enter a job ID'; return; }
+      btnStatus.disabled = true;
+        try {
+          const res = await fetch('/api/status/' + encodeURIComponent(id));
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || res.statusText || 'Request failed');
+          statusResult.innerHTML = '<strong>Status:</strong> ' + data.status + '<br><strong>Attempt:</strong> ' + data.attempt + (data.last_error ? '<br><strong>Error:</strong> ' + data.last_error : '');
+        } catch (e) {
+          statusResult.innerHTML = '<span class="error">' + e.message + '</span>';
+        }
+      btnStatus.disabled = false;
+    });
+
+    const archivedErrorEl = document.getElementById('archived-error');
+    const archivedTableWrap = document.getElementById('archived-table-wrap');
+    const archivedTbody = document.getElementById('archived-tbody');
+    document.getElementById('btn-load-archived').addEventListener('click', async () => {
+      archivedErrorEl.style.display = 'none';
+      archivedTableWrap.style.display = 'block';
+      archivedTbody.innerHTML = '<tr><td colspan="7" style="padding:0.5rem;">Loading…</td></tr>';
+      try {
+        const res = await fetch('/api/archived?limit=50');
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || res.statusText || 'Request failed');
+        const jobs = data.jobs || [];
+        if (jobs.length === 0) {
+          archivedTbody.innerHTML = '<tr><td colspan="7" style="padding:0.5rem;">No archived jobs.</td></tr>';
+          return;
+        }
+        archivedTbody.innerHTML = jobs.map(j => {
+          const created = j.created_at_unix_sec ? new Date(j.created_at_unix_sec * 1000).toISOString() : '';
+          const err = (j.last_error || '').substring(0, 80) + (j.last_error && j.last_error.length > 80 ? '…' : '');
+          return '<tr style="border-bottom:1px solid #eee">' +
+            '<td style="padding:0.35rem 0.5rem; font-family:monospace; word-break:break-all;">' + (j.job_id || '') + '</td>' +
+            '<td style="padding:0.35rem 0.5rem;">' + (j.type || '') + '</td>' +
+            '<td style="padding:0.35rem 0.5rem;">' + (j.queue || '') + '</td>' +
+            '<td style="padding:0.35rem 0.5rem;">' + (j.attempt ?? '') + '</td>' +
+            '<td style="padding:0.35rem 0.5rem; max-width:200px;" title="' + (j.last_error || '').replace(/"/g, '&quot;') + '">' + (err || '—') + '</td>' +
+            '<td style="padding:0.35rem 0.5rem;">' + created + '</td>' +
+            '<td style="padding:0.35rem 0.5rem;"><button class="replay-btn" data-job-id="' + (j.job_id || '').replace(/"/g, '&quot;') + '" data-queue="' + (j.queue || 'default').replace(/"/g, '&quot;') + '">Replay</button></td>' +
+            '</tr>';
+        }).join('');
+        archivedTbody.querySelectorAll('.replay-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const jobId = btn.dataset.jobId;
+            const queue = btn.dataset.queue || 'default';
+            btn.disabled = true;
+            try {
+              const res = await fetch('/api/retry', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ job_id: jobId, queue: queue })
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || res.statusText || 'Replay failed');
+              const newJobId = data.job_id || jobId;
+              jobIdInput.value = newJobId;
+              statusResult.innerHTML = '<strong>Replay enqueued.</strong> New job ID: ' + newJobId + ' — click Get status to see progress.';
+            } catch (e) {
+              statusResult.innerHTML = '<span class="error">Replay error: ' + e.message + '</span>';
+            }
+            btn.disabled = false;
+          });
+        });
+      } catch (e) {
+        archivedErrorEl.textContent = e.message;
+        archivedErrorEl.style.display = 'block';
+        archivedTbody.innerHTML = '<tr><td colspan="7" style="padding:0.5rem;"></td></tr>';
+      }
+    });
+  </script>
+</body>
+</html>
