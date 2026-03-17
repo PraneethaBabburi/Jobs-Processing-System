@@ -293,7 +293,7 @@ func main() {
 
 // #region agent log
 func workerDebugLog(hypothesisId, location, message string, data map[string]interface{}, runId string) {
-	f, err := os.OpenFile(".cursor/debug-2f900c.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile("debug-2f900c.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return
 	}

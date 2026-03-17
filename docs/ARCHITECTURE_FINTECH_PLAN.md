@@ -1,6 +1,6 @@
 # Architecture Diagram — Fintech Production Features Plan
 
-This diagram reflects the target architecture described in the [Fintech Production Features](c:\Users\likhi\.cursor\plans\fintech_production_features_42b4ad89.plan.md) plan (Phases 1–5).
+
 
 ---
 
