@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: job-worker
+  namespace: default
+  labels:
+    app: job-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: job-worker
+  template:
+    metadata:
+      labels:
+        app: job-worker
+    spec:
+      containers:
+        - name: worker
+          image: job-worker:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POSTGRES_DSN
+              value: "postgres://jobs:jobs@postgres:5432/jobs?sslmode=disable"
+            - name: KAFKA_BROKERS
+              value: "kafka:9092"
+            - name: KAFKA_TOPIC
+              value: "job.events"
+            - name: KAFKA_JOBS_TOPIC
+              value: "job.requests"
+            - name: KAFKA_CONSUMER_GROUP
+              value: "job-worker"
+            - name: SMTP_ADDR
+              value: "mailpit:1025"
+            - name: EMAIL_FROM
+              value: "noreply@localhost"
+            - name: REPORT_OUTPUT_DIR
+              value: "/out"
+            - name: INVOICE_OUTPUT_DIR
+              value: "/out"
+            - name: IMAGE_OUTPUT_DIR
+              value: "/out"
+          ports:
+            - containerPort: 9090
+              name: health
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 9090
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 10
+          volumeMounts:
+            - name: out
+              mountPath: /out
+      volumes:
+        - name: out
+          emptyDir: {}
+
